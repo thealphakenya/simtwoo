@@ -29,6 +29,12 @@ const apiPass = process.env.BITGET_API_PASSPHRASE || '';
 // Check if all required API credentials are available
 const hasCredentials = apiKey && apiSecret && apiPass;
 
+console.log('API Credentials Check:', {
+  hasKey: !!apiKey,
+  hasSecret: !!apiSecret,
+  hasPass: !!apiPass
+});
+
 let client: APIClient | null = null;
 
 if (hasCredentials) {

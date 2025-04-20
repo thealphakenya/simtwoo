@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import crypto from 'crypto';
 import * as bitget from 'bitget-api';
@@ -271,33 +272,38 @@ export class BitgetService {
                  (parseFloat(currentPrice) * 1.002).toString() : // 0.2% above market
                  (parseFloat(currentPrice) * 0.998).toString()   // 0.2% below market
         };
-      
-      // Add price for limit orders
-      if (params.orderType === 'limit' && params.price) {
-        orderParams['price'] = params.price;
-      }
 
-      // Execute the order
-      const response = await client.spot.order.placeOrder(orderParams);
-      
-      if (!response || !response.data) {
-        throw new Error('Invalid response from Bitget API');
-      }
+        // Add price for limit orders
+        if (params.orderType === 'limit' && params.price) {
+          orderParams.price = params.price;
+        }
 
-      return {
-        orderId: response.data.orderId,
-        clientOrderId: response.data.clientOid,
-        symbol: params.symbol,
-        side: params.side,
-        size: params.size,
-        price: params.price || '0',
-        status: 'NEW',
-        timestamp: Date.now()
-      };
-    } catch (error) {
-      console.error('Error executing trade:', error);
-      throw new Error(`Failed to execute trade: ${error.message}`);
+        // Execute the order
+        const response = await client.spot.order.placeOrder(orderParams);
+        
+        if (!response || !response.data) {
+          throw new Error('Invalid response from Bitget API');
+        }
+
+        return {
+          orderId: response.data.orderId,
+          clientOrderId: response.data.clientOid,
+          symbol: params.symbol,
+          side: params.side,
+          size: params.size,
+          price: params.price || '0',
+          status: 'NEW',
+          timestamp: Date.now()
+        };
+      } catch (error) {
+        console.error('Error executing trade:', error);
+        attempt++;
+        if (attempt === maxRetries) {
+          throw new Error(`Failed to execute trade: ${error.message}`);
+        }
+      }
     }
+    throw new Error('Failed to execute trade after maximum retries');
   }
   
   /**

@@ -38,9 +38,88 @@ export class TradingService {
   // Confidence thresholds for trading decisions (0-100%)
   private confidenceThreshold: number = 70;
   
+  // Maximum number of concurrent open trades
+  private maxConcurrentTrades: number = 3;
+  
+  // Supported trading pairs with their weights for automatic selection
+  private tradingPairs: {symbol: string, weight: number}[] = [
+    { symbol: 'BTCUSDT', weight: 0.3 },
+    { symbol: 'ETHUSDT', weight: 0.25 },
+    { symbol: 'BNBUSDT', weight: 0.2 },
+    { symbol: 'XRPUSDT', weight: 0.15 },
+    { symbol: 'DOGEUSDT', weight: 0.1 }
+  ];
+  
+  // Track volatility and performance for each pair
+  private pairPerformance: Record<string, {
+    volatility: number,
+    successRate: number,
+    lastUpdated: number
+  }> = {};
+  
   constructor() {
     // Initialize the trading service
     console.log('Trading service initialized');
+    
+    // Initialize performance metrics for each pair
+    this.tradingPairs.forEach(pair => {
+      this.pairPerformance[pair.symbol] = {
+        volatility: 0,
+        successRate: 0,
+        lastUpdated: Date.now()
+      };
+    });
+  }
+  
+  /**
+   * Get the top performing trading pairs based on weight and performance
+   */
+  private getTopTradingPairs(count: number = 3): string[] {
+    // Calculate a score for each pair based on weight, volatility, and success rate
+    const pairScores = this.tradingPairs.map(pair => {
+      const performance = this.pairPerformance[pair.symbol];
+      // Score = base weight + (volatility * 0.3) + (success rate * 0.5)
+      const score = pair.weight + 
+                   (performance.volatility * 0.3) + 
+                   (performance.successRate * 0.5);
+      
+      return {
+        symbol: pair.symbol,
+        score
+      };
+    });
+    
+    // Sort by score in descending order and take the top count
+    return pairScores
+      .sort((a, b) => b.score - a.score)
+      .slice(0, count)
+      .map(p => p.symbol);
+  }
+  
+  /**
+   * Check if we've reached the maximum number of concurrent trades
+   */
+  private async hasReachedMaxTrades(userId: number): Promise<boolean> {
+    const openTrades = await storage.getOpenTrades(userId);
+    return openTrades.length >= this.maxConcurrentTrades;
+  }
+  
+  /**
+   * Update performance metrics for a trading pair
+   */
+  private updatePairPerformance(symbol: string, tradeSuccess: boolean, volatility: number): void {
+    const performance = this.pairPerformance[symbol];
+    if (!performance) return;
+    
+    // Update success rate using a weighted average (recent trades have more impact)
+    const oldWeight = 0.7;
+    const newWeight = 0.3;
+    performance.successRate = (performance.successRate * oldWeight) + 
+                             (tradeSuccess ? 1 : 0) * newWeight;
+    
+    // Update volatility
+    performance.volatility = (performance.volatility * 0.8) + (volatility * 0.2);
+    performance.lastUpdated = Date.now();
   }
   
   /**
@@ -63,7 +142,24 @@ export class TradingService {
       // Create an interval to run the trading strategy
       const intervalId = setInterval(async () => {
         try {
-          await this.runTradingCycle(userId, settings.symbol, settings.strategy, settings.riskPerTrade.toString());
+          // Check if we've reached the maximum number of concurrent trades
+          const maxTradesReached = await this.hasReachedMaxTrades(userId);
+          if (maxTradesReached) {
+            console.log(`Maximum concurrent trades (${this.maxConcurrentTrades}) reached for user ${userId}. Skipping trading cycle.`);
+            return;
+          }
+          
+          // Auto-select trading pairs if strategy is ENSEMBLE or AUTO
+          let symbols = [settings.symbol];
+          if (settings.strategy === 'ENSEMBLE' || settings.strategy === 'AUTO') {
+            symbols = this.getTopTradingPairs();
+            console.log(`Auto-selected trading pairs for user ${userId}: ${symbols.join(', ')}`);
+          }
+          
+          // Run trading cycle for each symbol
+          for (const symbol of symbols) {
+            await this.runTradingCycle(userId, symbol, settings.strategy, settings.riskPerTrade.toString());
+          }
         } catch (error) {
           console.error(`Error in trading cycle for user ${userId}:`, error);
         }
@@ -106,15 +202,25 @@ export class TradingService {
       // 1. Get latest market data
       const candles = await this.getHistoricalData(symbol, '15m', 100);
       
-      // 2. Analyze market using the selected strategy
+      // 2. Calculate volatility for pair performance tracking
+      const volatility = this.calculateVolatility(candles);
+      
+      // 3. Analyze market using the selected strategy
       const signal = await this.analyzeMarket(candles, strategyName as Strategy);
       
-      // 3. Check if we should execute a trade based on confidence
+      // 4. Check if we should execute a trade based on confidence
       if (signal && signal.confidence >= this.confidenceThreshold) {
-        // 4. Check account balance
+        // 5. Check account balance
         const balance = await bitgetService.getAccountBalance();
         
-        // 5. Calculate position size based on risk per trade
+        // 6. Check if we've reached the maximum number of concurrent trades
+        const maxTradesReached = await this.hasReachedMaxTrades(userId);
+        if (maxTradesReached) {
+          console.log(`Maximum concurrent trades (${this.maxConcurrentTrades}) reached for user ${userId}. Skipping trade execution.`);
+          return;
+        }
+        
+        // 7. Calculate position size based on risk per trade
         const positionSize = this.calculatePositionSize(
           balance.availableBalance,
           riskPerTrade,
@@ -122,14 +228,26 @@ export class TradingService {
           signal.side
         );
         
-        // 6. Execute the trade
+        // 8. Execute the trade
         if (new Decimal(positionSize).greaterThan(0)) {
-          const tradeResult = await this.executeTrade(userId, signal, positionSize);
-          console.log(`Trade executed: ${tradeResult.orderId}`);
-          
-          // 7. Record the balance after the trade
-          await this.recordBalance(userId, balance);
+          try {
+            const tradeResult = await this.executeTrade(userId, signal, positionSize);
+            console.log(`Trade executed: ${tradeResult.orderId}`);
+            
+            // 9. Record the balance after the trade
+            await this.recordBalance(userId, balance);
+            
+            // 10. Update pair performance metrics with successful trade
+            this.updatePairPerformance(symbol, true, volatility);
+          } catch (tradeError) {
+            console.error(`Error executing trade for ${symbol}:`, tradeError);
+            // Update pair performance metrics with failed trade
+            this.updatePairPerformance(symbol, false, volatility);
+          }
         }
+      } else {
+        // Just update the volatility even if no trade was executed
+        this.updatePairPerformance(symbol, true, volatility);
       }
     } catch (error) {
       console.error('Error in trading cycle:', error);

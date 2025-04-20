@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Simtwo - AI Trading Dashboard</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="dark">
+  <div id="container">
+    <header>
+      <h1>Simtwo - AI Trading Dashboard</h1>
+      <div class="header-right">
+        <div class="theme-toggle">
+          <label class="switch">
+            <input type="checkbox" id="theme-toggle">
+            <span class="slider round"></span>
+          </label>
+          <span id="theme-label">Dark Mode</span>
+        </div>
+        <div id="symbol-filter">
+          <label for="symbol-select"><strong>Active Symbol:</strong></label>
+          <select id="symbol-select">
+            <option value="BTCUSDT">BTCUSDT</option>
+            <option value="ETHUSDT">ETHUSDT</option>
+            <option value="BNBUSDT">BNBUSDT</option>
+            <option value="XRPUSDT">XRPUSDT</option>
+            <option value="DOGEUSDT">DOGEUSDT</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="current-price">
+        <strong>Live Prices:</strong>
+        <div id="price">
+          <div class="symbol-price" data-symbol="BTCUSDT">BTCUSDT: <span>Loading...</span></div>
+          <div class="symbol-price" data-symbol="ETHUSDT">ETHUSDT: <span>Loading...</span></div>
+          <div class="symbol-price" data-symbol="BNBUSDT">BNBUSDT: <span>Loading...</span></div>
+          <div class="symbol-price" data-symbol="XRPUSDT">XRPUSDT: <span>Loading...</span></div>
+          <div class="symbol-price" data-symbol="DOGEUSDT">DOGEUSDT: <span>Loading...</span></div>
+        </div>
+      </div>
+    </header>
+
+    <canvas id="chart-canvas" width="600" height="300"></canvas>
+
+    <section id="status-panel">
+      <div id="ai-status">AI Status: <span id="ai-status-indicator" class="active">ACTIVE</span> — Monitoring...</div>
+      <div id="balance-display">Balance: $200.00</div>
+    </section>
+
+    <section id="controls">
+      <div id="model-config">
+        <label for="model-select">Model:</label>
+        <select id="model-select">
+          <option value="ensemble">Ensemble (All Models)</option>
+          <option value="lstm">LSTM</option>
+          <option value="trading_ai">Trading AI</option>
+          <option value="rl">Reinforcement</option>
+        </select>
+
+        <label for="confidence-input">Confidence Threshold:</label>
+        <input id="confidence-input" type="number" step="0.01" min="0" max="1" value="0.5" />
+      </div>
+
+      <div id="account-selection">
+        <button id="virtualAccountBtn">Virtual Account</button>
+        <button id="realAccountBtn">Real Account</button>
+      </div>
+
+      <div id="order-section">
+        <button id="autoTradeButton">Start Auto Trading</button>
+        <select id="order-type">
+          <option value="limit">Limit</option>
+          <option value="market" selected>Market</option>
+        </select>
+        <input id="order-amount" type="number" step="0.001" placeholder="Order amount" />
+        <button id="place-buy-order">Buy</button>
+        <button id="place-sell-order">Sell</button>
+      </div>
+
+      <div id="ai-controls">
+        <button id="set-ai-active">Set AI Active</button>
+        <button id="set-ai-stopped">Set AI Stopped</button>
+      </div>
+
+      <div id="emergency-stop">
+        <button id="emergency-stop-btn">Emergency Stop</button>
+      </div>
+    </section>
+
+    <section id="chatwithai">
+      <h3>Chat with AI</h3>
+      <div id="chat-box" class="chat-box"></div>
+      <form id="chat-form" class="chat-form">
+        <input type="text" id="chat-input" class="chat-input" placeholder="Ask AI..." autocomplete="off"/>
+        <button type="submit" class="chat-submit">Send</button>
+      </form>
+
+      <h3>Strategy Weights</h3>
+      <label for="lstm-weight">LSTM:</label>
+      <input id="lstm-weight" class="range-blue" type="range" min="0" max="1" step="0.01" value="0.33" />
+      <label for="trading-ai-weight">Trading AI:</label>
+      <input id="trading-ai-weight" class="range-green" type="range" min="0" max="1" step="0.01" value="0.33" />
+      <label for="reinforcement-weight">Reinforcement:</label>
+      <input id="reinforcement-weight" class="range-purple" type="range" min="0" max="1" step="0.01" value="0.34" />
+      <button id="update-strategy">Update Strategy</button>
+    </section>
+
+    <!-- P2P Bot Section -->
+    <section id="p2p-bot">
+      <h3>Binance P2P Trading Bot</h3>
+      <div id="p2p-status">Status: <span id="status">Not running</span></div>
+      <div id="p2p-balance">Balance: <span id="balance">Loading...</span></div>
+      <button id="startStopButton">Start Bot</button>
+    </section>
+  </div>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>

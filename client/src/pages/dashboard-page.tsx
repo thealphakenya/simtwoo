@@ -1,8 +1,15 @@
 import { useAuth } from "@/hooks/use-auth";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+
+// Chart.js type declaration
+declare global {
+  interface Window {
+    Chart: any;
+  }
+}
 import {
   Card,
   CardContent,
@@ -31,6 +38,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
 import {
   Activity,
   Briefcase,
@@ -43,9 +51,13 @@ import {
   Settings,
   TrendingUp,
   Users,
+  AlertTriangle,
+  Bot,
+  MessageCircle,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 
 // Types
 interface Trade {
@@ -94,6 +106,15 @@ export default function DashboardPage() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("overview");
   const [confidence, setConfidence] = useState(70);
+  const chartRef = useRef(null);
+  const [prices, setPrices] = useState<{[key: string]: string}>({
+    BTCUSDT: "Loading...",
+    ETHUSDT: "Loading...",
+    BNBUSDT: "Loading...",
+    XRPUSDT: "Loading...",
+    DOGEUSDT: "Loading..."
+  });
+  const [darkMode, setDarkMode] = useState(true);
   
   // Fetch balance data
   const {
@@ -287,6 +308,113 @@ export default function DashboardPage() {
     if (!pnl) return "text-gray-500";
     return parseFloat(pnl) >= 0 ? "text-green-500" : "text-red-500";
   };
+  
+  // Update market data to refresh prices
+  useEffect(() => {
+    if (marketData?.price) {
+      setPrices(prevPrices => ({
+        ...prevPrices,
+        [marketData.symbol]: formatCurrency(marketData.price)
+      }));
+    }
+  }, [marketData]);
+  
+  // Function to fetch all symbols' prices
+  const fetchAllPrices = async () => {
+    try {
+      const symbols = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "XRPUSDT", "DOGEUSDT"];
+      const newPrices: {[key: string]: string} = {};
+      
+      for (const symbol of symbols) {
+        if (symbol === "BTCUSDT" && marketData?.price) {
+          newPrices[symbol] = formatCurrency(marketData.price);
+          continue;
+        }
+        
+        try {
+          const res = await fetch(`/api/market/${symbol}`);
+          if (res.ok) {
+            const data = await res.json();
+            newPrices[symbol] = formatCurrency(data.price);
+          } else {
+            newPrices[symbol] = "Error";
+          }
+        } catch (err) {
+          newPrices[symbol] = "Error";
+        }
+      }
+      
+      setPrices(newPrices);
+    } catch (error) {
+      console.error("Failed to fetch prices:", error);
+    }
+  };
+  
+  // Fetch all prices on component mount
+  useEffect(() => {
+    fetchAllPrices();
+    const interval = setInterval(fetchAllPrices, 60000); // Update every minute
+    return () => clearInterval(interval);
+  }, []);
+  
+  // Initialize chart
+  useEffect(() => {
+    if (chartRef.current && typeof window !== 'undefined' && window.Chart) {
+      // Prepare data for the chart - use random data initially
+      // In a real app, this would be historical price data from your API
+      const labels = Array.from({length: 24}, (_, i) => `${i}:00`);
+      const data = Array.from({length: 24}, () => 50000 + Math.random() * 5000);
+      
+      const mockData = {
+        labels,
+        datasets: [{
+          label: 'BTC Price',
+          data,
+          borderColor: darkMode ? '#3b82f6' : '#1e40af',
+          backgroundColor: darkMode ? 'rgba(59, 130, 246, 0.1)' : 'rgba(30, 64, 175, 0.1)',
+          fill: true,
+          tension: 0.4
+        }]
+      };
+      
+      const config = {
+        type: 'line',
+        data: mockData,
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              display: false
+            },
+            tooltip: {
+              mode: 'index',
+              intersect: false
+            }
+          },
+          scales: {
+            x: {
+              grid: {
+                display: false
+              }
+            },
+            y: {
+              beginAtZero: false,
+              grid: {
+                color: darkMode ? 'rgba(200, 200, 200, 0.1)' : 'rgba(0, 0, 0, 0.1)'
+              }
+            }
+          }
+        }
+      };
+      
+      const myChart = new window.Chart(chartRef.current, config);
+      
+      return () => {
+        myChart.destroy();
+      };
+    }
+  }, [darkMode]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -312,6 +440,52 @@ export default function DashboardPage() {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
+        {/* Price Data Header */}
+        <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-8">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
+            <div className="flex items-center mb-4 md:mb-0">
+              <h2 className="text-xl font-bold">Live Prices:</h2>
+            </div>
+            <div className="flex flex-wrap gap-4">
+              {Object.entries(prices).map(([symbol, price]) => (
+                <div key={symbol} className="flex items-center space-x-2">
+                  <span className="font-medium">{symbol}:</span>
+                  <span>{price}</span>
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center mt-4 md:mt-0">
+              <label className="inline-flex items-center cursor-pointer">
+                <span className="mr-2 text-sm font-medium">
+                  {darkMode ? 'Dark Mode' : 'Light Mode'}
+                </span>
+                <Switch 
+                  checked={darkMode} 
+                  onCheckedChange={setDarkMode} 
+                />
+              </label>
+            </div>
+          </div>
+        </div>
+        
+        {/* Price Chart */}
+        <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-8">
+          <div className="h-[300px] w-full">
+            <canvas ref={chartRef} className="w-full h-full"></canvas>
+          </div>
+          <div className="flex items-center justify-between mt-2">
+            <div className="flex items-center">
+              <div className={`h-3 w-3 rounded-full ${tradingStatus?.isActive ? "bg-green-500" : "bg-red-500"} mr-2`}></div>
+              <span className="text-sm font-medium">
+                AI Status: {tradingStatus?.isActive ? "ACTIVE — Monitoring..." : "INACTIVE"}
+              </span>
+            </div>
+            <div className="text-sm font-medium">
+              Balance: {formatCurrency(balanceData?.totalBalance)}
+            </div>
+          </div>
+        </div>
+        
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           {/* Sidebar */}
           <div className="lg:col-span-1">
@@ -626,8 +800,9 @@ export default function DashboardPage() {
                           <SelectContent>
                             <SelectItem value="BTCUSDT">BTC/USDT</SelectItem>
                             <SelectItem value="ETHUSDT">ETH/USDT</SelectItem>
-                            <SelectItem value="LTCUSDT">LTC/USDT</SelectItem>
+                            <SelectItem value="BNBUSDT">BNB/USDT</SelectItem>
                             <SelectItem value="XRPUSDT">XRP/USDT</SelectItem>
+                            <SelectItem value="DOGEUSDT">DOGE/USDT</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -650,20 +825,23 @@ export default function DashboardPage() {
                         </Select>
                       </div>
                       <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-700">Strategy</label>
+                        <label className="text-sm font-medium text-gray-700">Model</label>
                         <Select 
-                          defaultValue={tradingSettings?.strategy || "MACD"}
+                          defaultValue={tradingSettings?.strategy || "ENSEMBLE"}
                           onValueChange={(value) => handleUpdateSettings("strategy", value)}
                           disabled={tradingStatus?.isActive}
                         >
                           <SelectTrigger>
-                            <SelectValue placeholder="Select strategy" />
+                            <SelectValue placeholder="Select model" />
                           </SelectTrigger>
                           <SelectContent>
+                            <SelectItem value="ENSEMBLE">Ensemble (All Models)</SelectItem>
+                            <SelectItem value="LSTM">LSTM</SelectItem>
                             <SelectItem value="MACD">MACD</SelectItem>
                             <SelectItem value="RSI">RSI</SelectItem>
                             <SelectItem value="BOLLINGER">Bollinger Bands</SelectItem>
                             <SelectItem value="EMA">EMA Cross</SelectItem>
+                            <SelectItem value="RL">Reinforcement Learning</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -708,6 +886,38 @@ export default function DashboardPage() {
                         Higher values require stronger signals but may result in fewer trades.
                       </p>
                     </div>
+
+                    <div className="space-y-2 mt-6">
+                      <h3 className="text-sm font-medium text-gray-700">Trading Mode</h3>
+                      <div className="flex space-x-3">
+                        <Button variant="outline" className="flex-1">Virtual Account</Button>
+                        <Button variant="outline" className="flex-1">Real Account</Button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 mt-6">
+                      <h3 className="text-sm font-medium text-gray-700">Manual Trading</h3>
+                      <div className="flex space-x-3">
+                        <Select defaultValue="market">
+                          <SelectTrigger className="w-32">
+                            <SelectValue placeholder="Order type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="market">Market</SelectItem>
+                            <SelectItem value="limit">Limit</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Input 
+                          type="number" 
+                          placeholder="Amount" 
+                          className="flex-1"
+                          min="0.001"
+                          step="0.001"
+                        />
+                        <Button variant="default" className="bg-green-600 hover:bg-green-700">Buy</Button>
+                        <Button variant="destructive">Sell</Button>
+                      </div>
+                    </div>
                   </CardContent>
                   <CardFooter className="border-t border-gray-100 pt-4">
                     <Button 
@@ -721,10 +931,49 @@ export default function DashboardPage() {
                       ) : tradingStatus?.isActive ? (
                         "Stop Trading Bot"
                       ) : (
-                        "Start Trading Bot"
+                        "Start Auto Trading"
                       )}
                     </Button>
                   </CardFooter>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center">
+                      <Bot className="h-5 w-5 mr-2 text-blue-500" />
+                      AI Strategy Weights
+                    </CardTitle>
+                    <CardDescription>Adjust the importance of each model in the ensemble</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-6">
+                      <div>
+                        <div className="flex justify-between text-sm mb-2">
+                          <span className="font-medium">LSTM Model</span>
+                          <span>33%</span>
+                        </div>
+                        <Slider defaultValue={[33]} max={100} step={1} className="h-2" />
+                      </div>
+                      <div>
+                        <div className="flex justify-between text-sm mb-2">
+                          <span className="font-medium">Trading AI</span>
+                          <span>33%</span>
+                        </div>
+                        <Slider defaultValue={[33]} max={100} step={1} className="h-2" />
+                      </div>
+                      <div>
+                        <div className="flex justify-between text-sm mb-2">
+                          <span className="font-medium">Reinforcement Learning</span>
+                          <span>34%</span>
+                        </div>
+                        <Slider defaultValue={[34]} max={100} step={1} className="h-2" />
+                      </div>
+                      
+                      <Button variant="outline" className="w-full mt-4">
+                        Update Strategy
+                      </Button>
+                    </div>
+                  </CardContent>
                 </Card>
 
                 <Card>
@@ -755,6 +1004,69 @@ export default function DashboardPage() {
                         </div>
                         <Progress value={0} className="h-2" />
                       </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center">
+                      <MessageCircle className="h-5 w-5 mr-2 text-blue-500" />
+                      Chat with AI
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="bg-gray-50 rounded-md p-4 h-48 overflow-y-auto mb-4">
+                      <div className="flex flex-col space-y-3">
+                        <div className="bg-blue-100 text-blue-900 rounded-md p-2 max-w-[80%] self-start">
+                          Hello! I'm your AI trading assistant. How can I help you today?
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex space-x-2">
+                      <Input 
+                        type="text" 
+                        placeholder="Ask AI..." 
+                        className="flex-1"
+                      />
+                      <Button variant="outline">Send</Button>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center">
+                      <AlertTriangle className="h-5 w-5 mr-2 text-red-500" />
+                      Emergency Controls
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Button variant="destructive" className="w-full">Emergency Stop All Trading</Button>
+                  </CardContent>
+                </Card>
+                
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center">
+                      <Bot className="h-5 w-5 mr-2 text-blue-500" />
+                      P2P Trading Bot
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex flex-col space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-sm font-medium text-gray-700">Status</p>
+                          <p className="mt-1">Not Running</p>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-700">Balance</p>
+                          <p className="mt-1">Loading...</p>
+                        </div>
+                      </div>
+                      <Button variant="outline" className="w-full">Start P2P Bot</Button>
                     </div>
                   </CardContent>
                 </Card>

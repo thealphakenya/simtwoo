@@ -30,15 +30,15 @@ async function comparePasswords(supplied: string, stored: string) {
 
 export function setupAuth(app: Express) {
   const sessionSettings: session.SessionOptions = {
-    secret: process.env.SESSION_SECRET || "dev-secret-key-change-in-production",
+    secret: process.env.SESSION_SECRET || 'bitget-trading-app-secret',
     resave: false,
     saveUninitialized: false,
     store: storage.sessionStore,
     cookie: {
-      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 1 week
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax'
     }
   };
 
@@ -52,7 +52,7 @@ export function setupAuth(app: Express) {
       try {
         const user = await storage.getUserByUsername(username);
         if (!user || !(await comparePasswords(password, user.password))) {
-          return done(null, false, { message: "Invalid username or password" });
+          return done(null, false);
         } else {
           return done(null, user);
         }
@@ -74,47 +74,40 @@ export function setupAuth(app: Express) {
 
   app.post("/api/register", async (req, res, next) => {
     try {
-      // Validate request body
-      const { username, password } = req.body;
-      
-      if (!username || !password) {
-        return res.status(400).json({ message: "Username and password are required" });
-      }
-
-      // Check if user already exists
-      const existingUser = await storage.getUserByUsername(username);
+      const existingUser = await storage.getUserByUsername(req.body.username);
       if (existingUser) {
-        return res.status(400).json({ message: "Username already exists" });
+        return res.status(400).json({ error: "Username already exists" });
       }
 
-      // Create new user with hashed password
-      const hashedPassword = await hashPassword(password);
       const user = await storage.createUser({
-        username,
-        password: hashedPassword,
+        ...req.body,
+        password: await hashPassword(req.body.password),
       });
 
-      // Log the user in
       req.login(user, (err) => {
         if (err) return next(err);
-        // Return user info without password
         const { password, ...userWithoutPassword } = user;
-        res.status(201).json(user);
+        res.status(201).json(userWithoutPassword);
       });
-    } catch (error) {
-      next(error);
+    } catch (err) {
+      next(err);
     }
   });
 
   app.post("/api/login", (req, res, next) => {
-    passport.authenticate("local", (err, user, info) => {
-      if (err) return next(err);
+    passport.authenticate("local", (err: Error, user: Express.User) => {
+      if (err) {
+        return next(err);
+      }
       if (!user) {
-        return res.status(401).json({ message: info?.message || "Invalid username or password" });
+        return res.status(401).json({ error: "Invalid username or password" });
       }
       req.login(user, (err) => {
-        if (err) return next(err);
-        res.status(200).json(user);
+        if (err) {
+          return next(err);
+        }
+        const { password, ...userWithoutPassword } = user;
+        return res.json(userWithoutPassword);
       });
     })(req, res, next);
   });
@@ -127,9 +120,8 @@ export function setupAuth(app: Express) {
   });
 
   app.get("/api/user", (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.sendStatus(401);
-    }
-    res.json(req.user);
+    if (!req.isAuthenticated()) return res.sendStatus(401);
+    const { password, ...userWithoutPassword } = req.user;
+    res.json(userWithoutPassword);
   });
 }

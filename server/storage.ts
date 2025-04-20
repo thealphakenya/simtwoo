@@ -125,7 +125,7 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           eq(trades.userId, userId),
-          eq(trades.status, 'OPEN')
+          eq(trades.status, "OPEN")
         )
       )
       .orderBy(desc(trades.openedAt));

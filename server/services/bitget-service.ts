@@ -34,11 +34,28 @@ let client: APIClient | null = null;
 if (hasCredentials) {
   try {
     // Create real client using the bitget package
-    client = new bitget.default({
+    const bitgetClient = new bitget.default({
       apiKey: apiKey,
       apiSecret: apiSecret,
-      apiPass: apiPass
+      apiPassphrase: apiPass // Note: Changed to apiPassphrase as per Bitget SDK requirements
     });
+
+    client = {
+      spot: {
+        account: {
+          assets: () => bitgetClient.spot.account.assets()
+        },
+        market: {
+          ticker: (params: any) => bitgetClient.spot.market.ticker(params),
+          candles: (params: any) => bitgetClient.spot.market.candles(params)
+        },
+        order: {
+          placeOrder: (params: any) => bitgetClient.spot.order.placeOrder(params),
+          orderInfo: (params: any) => bitgetClient.spot.order.orderInfo(params),
+          cancelOrder: (params: any) => bitgetClient.spot.order.cancelOrder(params)
+        }
+      }
+    };
     
     console.log('Bitget API client initialized successfully');
   } catch (error: any) {

@@ -144,6 +144,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Trading control endpoints
+  app.get("/api/trading/status", ensureAuthenticated, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      
+      // Get trading settings
+      const settings = await storage.getTradingSettings(userId);
+      const isActive = tradingService.isActive(); // Global trading service status
+      const openTrades = await storage.getOpenTrades(userId);
+      
+      res.status(200).json({
+        isActive: isActive,
+        enabledInSettings: settings?.enabledTrading || false,
+        maxConcurrentTrades: 3, // Hardcoded to 3 as per requirement
+        currentOpenTrades: openTrades.length,
+        confidenceThreshold: tradingService.getConfidenceThreshold(),
+        bitgetConnected: bitgetService.isReady(),
+        settings: settings || null
+      });
+    } catch (error) {
+      console.error("Error getting trading status:", error);
+      res.status(500).json({ error: "Failed to get trading status" });
+    }
+  });
+
   app.post("/api/trading/start", ensureAuthenticated, async (req, res) => {
     try {
       const userId = req.user!.id;
@@ -267,24 +291,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get trading status
-  app.get("/api/trading/status", ensureAuthenticated, async (req, res) => {
-    try {
-      const userId = req.user!.id;
-      const settings = await storage.getTradingSettings(userId);
-      
-      res.status(200).json({
-        isActive: tradingService.isActive(),
-        enabledInSettings: settings?.enabledTrading || false,
-        confidenceThreshold: tradingService.getConfidenceThreshold(),
-        bitgetConnected: bitgetService.isReady(),
-        settings
-      });
-    } catch (error) {
-      console.error("Error getting trading status:", error);
-      res.status(500).json({ error: "Failed to get trading status" });
-    }
-  });
+
 
   const httpServer = createServer(app);
 

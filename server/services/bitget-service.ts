@@ -145,13 +145,28 @@ export class BitgetService {
 
       if (Array.isArray(response.data)) {
         for (const asset of response.data) {
-          const available = new Decimal(asset.available || '0');
-          const frozen = new Decimal(asset.locked || '0');
-          const usdtValue = new Decimal(asset.usdtValue || '0');
-          const total = available.plus(frozen);
+          if (!asset || !asset.coinName) continue;
 
-          // Store all non-zero balances
-          if (!total.isZero() || !usdtValue.isZero()) {
+          const available = new Decimal(asset.available || '0');
+          const frozen = new Decimal(asset.frozen || '0');
+          const total = available.plus(frozen);
+          
+          // Get USDT price for non-USDT assets
+          let usdtValue = new Decimal(0);
+          if (asset.coinName === 'USDT') {
+            usdtValue = total;
+          } else if (total.gt(0)) {
+            try {
+              const ticker = await client.spot.market.ticker({ symbol: `${asset.coinName}USDT` });
+              if (ticker && ticker.data && ticker.data.close) {
+                usdtValue = total.mul(new Decimal(ticker.data.close));
+              }
+            } catch (e) {
+              console.warn(`Failed to get price for ${asset.coinName}:`, e);
+            }
+          }
+
+          if (!total.isZero()) {
             balances[asset.coinName] = {
               symbol: asset.coinName,
               available: available.toString(),
@@ -159,10 +174,9 @@ export class BitgetService {
               total: total.toString()
             };
 
-            // Add to total USDT value
             totalBalance = totalBalance.plus(usdtValue);
-            availableBalance = availableBalance.plus(available.mul(usdtValue.div(total.isZero() ? new Decimal(1) : total)));
-            frozenBalance = frozenBalance.plus(frozen.mul(usdtValue.div(total.isZero() ? new Decimal(1) : total)));
+            availableBalance = availableBalance.plus(available.mul(usdtValue.div(total)));
+            frozenBalance = frozenBalance.plus(frozen.mul(usdtValue.div(total)));
           }
         }
       }

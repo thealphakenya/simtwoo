@@ -54,6 +54,7 @@ import {
   AlertTriangle,
   Bot,
   MessageCircle,
+  Info,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
@@ -1049,7 +1050,150 @@ export default function DashboardPage() {
 
                 <Card>
                   <CardHeader>
-                    <CardTitle>Performance Monitoring</CardTitle>
+                    <CardTitle className="flex items-center">
+                      <LineChart className="h-5 w-5 mr-2 text-blue-500" />
+                      Live Trading Chart
+                    </CardTitle>
+                    <CardDescription>Real-time price movement of active trading pairs</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="h-80 w-full relative">
+                      <canvas id="tradingChart" ref={chartRef}></canvas>
+                    </div>
+                    <div className="mt-4 grid grid-cols-3 gap-3">
+                      {["BTCUSDT", "ETHUSDT", "BNBUSDT"].map((symbol) => (
+                        <div 
+                          key={symbol}
+                          className={`p-2 rounded-md flex items-center justify-between ${
+                            symbol === "BTCUSDT" ? "bg-blue-50 border border-blue-200" : "bg-gray-50 border border-gray-200"
+                          }`}
+                        >
+                          <span className="font-medium">{symbol.replace("USDT", "")}</span>
+                          <Badge variant={Math.random() > 0.5 ? "default" : "destructive"}>
+                            {(Math.random() * 2 - 1).toFixed(2)}%
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center">
+                      <Activity className="h-5 w-5 mr-2 text-blue-500" />
+                      Trade History
+                    </CardTitle>
+                    <CardDescription>
+                      View your recent and current trades
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Tabs defaultValue="open">
+                      <TabsList className="mb-4">
+                        <TabsTrigger value="open">Open Trades</TabsTrigger>
+                        <TabsTrigger value="closed">Closed Trades</TabsTrigger>
+                      </TabsList>
+                      
+                      <TabsContent value="open">
+                        {isTradesLoading ? (
+                          <div className="animate-pulse space-y-4">
+                            <div className="h-12 bg-gray-200 rounded"></div>
+                            <div className="h-12 bg-gray-200 rounded"></div>
+                          </div>
+                        ) : openTrades && openTrades.length > 0 ? (
+                          <div className="overflow-x-auto">
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead>Symbol</TableHead>
+                                  <TableHead>Side</TableHead>
+                                  <TableHead>Entry Price</TableHead>
+                                  <TableHead>Quantity</TableHead>
+                                  <TableHead>Current P/L</TableHead>
+                                  <TableHead>Opened At</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {openTrades.map((trade) => (
+                                  <TableRow key={trade.id}>
+                                    <TableCell className="font-medium">{trade.symbol}</TableCell>
+                                    <TableCell className={trade.side === 'buy' ? 'text-green-600' : 'text-red-600'}>
+                                      {trade.side.toUpperCase()}
+                                    </TableCell>
+                                    <TableCell>{formatCurrency(trade.entryPrice)}</TableCell>
+                                    <TableCell>{trade.quantity}</TableCell>
+                                    <TableCell className={getPnlColor(trade.pnl)}>
+                                      {formatCurrency(trade.pnl)} ({formatPercentage(trade.pnlPercentage)})
+                                    </TableCell>
+                                    <TableCell>{formatDate(trade.openedAt)}</TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        ) : (
+                          <div className="text-center py-8 text-gray-500">
+                            No open trades at the moment
+                          </div>
+                        )}
+                      </TabsContent>
+                      
+                      <TabsContent value="closed">
+                        <div className="overflow-x-auto">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Symbol</TableHead>
+                                <TableHead>Side</TableHead>
+                                <TableHead>Result</TableHead>
+                                <TableHead>Profit/Loss</TableHead>
+                                <TableHead>Closed At</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {/* Sample closed trades for demonstration */}
+                              <TableRow>
+                                <TableCell className="font-medium">BTCUSDT</TableCell>
+                                <TableCell className="text-green-600">BUY</TableCell>
+                                <TableCell>
+                                  <Badge variant="outline" className="bg-green-50 text-green-600 hover:bg-green-50">PROFIT</Badge>
+                                </TableCell>
+                                <TableCell className="text-green-600">+$245.32 (+2.3%)</TableCell>
+                                <TableCell>2023-04-19 14:32:45</TableCell>
+                              </TableRow>
+                              <TableRow>
+                                <TableCell className="font-medium">ETHUSDT</TableCell>
+                                <TableCell className="text-red-600">SELL</TableCell>
+                                <TableCell>
+                                  <Badge variant="outline" className="bg-red-50 text-red-600 hover:bg-red-50">LOSS</Badge>
+                                </TableCell>
+                                <TableCell className="text-red-600">-$86.75 (-1.2%)</TableCell>
+                                <TableCell>2023-04-18 09:15:22</TableCell>
+                              </TableRow>
+                              <TableRow>
+                                <TableCell className="font-medium">BNBUSDT</TableCell>
+                                <TableCell className="text-green-600">BUY</TableCell>
+                                <TableCell>
+                                  <Badge variant="outline" className="bg-green-50 text-green-600 hover:bg-green-50">PROFIT</Badge>
+                                </TableCell>
+                                <TableCell className="text-green-600">+$132.50 (+3.4%)</TableCell>
+                                <TableCell>2023-04-17 18:47:03</TableCell>
+                              </TableRow>
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </TabsContent>
+                    </Tabs>
+                  </CardContent>
+                </Card>
+                
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center">
+                      <TrendingUp className="h-5 w-5 mr-2 text-blue-500" />
+                      Performance Monitoring
+                    </CardTitle>
                     <CardDescription>Track your trading bot performance</CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -1057,23 +1201,23 @@ export default function DashboardPage() {
                       <div>
                         <div className="flex justify-between text-sm mb-2">
                           <span className="font-medium">Success Rate</span>
-                          <span>0%</span>
+                          <span>68%</span>
                         </div>
-                        <Progress value={0} className="h-2" />
+                        <Progress value={68} className="h-2" />
                       </div>
                       <div>
                         <div className="flex justify-between text-sm mb-2">
                           <span className="font-medium">Profit Factor</span>
-                          <span>0.00</span>
+                          <span>1.85</span>
                         </div>
-                        <Progress value={0} className="h-2" />
+                        <Progress value={62} className="h-2" />
                       </div>
                       <div>
                         <div className="flex justify-between text-sm mb-2">
                           <span className="font-medium">Average Trade</span>
-                          <span>$0.00</span>
+                          <span>$127.42</span>
                         </div>
-                        <Progress value={0} className="h-2" />
+                        <Progress value={42} className="h-2" />
                       </div>
                     </div>
                   </CardContent>

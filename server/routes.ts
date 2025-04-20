@@ -173,13 +173,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user!.id;
       
       // Make sure trading settings exist
-      const settings = await storage.getTradingSettings(userId);
-      if (!settings) {
-        return res.status(400).json({ error: "Trading settings not found" });
-      }
+      let settings = await storage.getTradingSettings(userId);
       
-      // Enable trading in settings
-      await storage.updateTradingSettings(settings.id, { enabledTrading: true });
+      // Create default settings if none exist
+      if (!settings) {
+        const defaultSettings = {
+          userId,
+          symbol: "BTCUSDT",
+          timeframe: "15m",
+          strategy: "ENSEMBLE",
+          riskPerTrade: "1",
+          leverageLevel: 1,
+          enabledTrading: true
+        };
+        
+        settings = await storage.createTradingSettings(defaultSettings);
+        console.log("Created default trading settings for user:", userId);
+      } else {
+        // Enable trading in existing settings
+        await storage.updateTradingSettings(settings.id, { enabledTrading: true });
+      }
       
       // Start trading
       const success = await tradingService.startTradingForUser(userId);
@@ -199,16 +212,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user!.id;
       
-      // Make sure trading settings exist
+      // Get trading settings if they exist
       const settings = await storage.getTradingSettings(userId);
-      if (!settings) {
-        return res.status(400).json({ error: "Trading settings not found" });
+      
+      // If settings exist, disable trading
+      if (settings) {
+        await storage.updateTradingSettings(settings.id, { enabledTrading: false });
       }
       
-      // Disable trading in settings
-      await storage.updateTradingSettings(settings.id, { enabledTrading: false });
-      
-      // Stop trading
+      // Stop trading regardless of settings presence
       const success = tradingService.stopTradingForUser(userId);
       
       res.status(200).json({ message: "Trading stopped successfully" });
@@ -267,6 +279,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error processing historical data:", error);
       res.status(500).json({ error: "Failed to process historical data" });
+    }
+  });
+  
+  // Get all active trading pairs with their data
+  app.get("/api/market/pairs/active", ensureAuthenticated, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const activePairs = tradingService.getActiveTradingPairs(userId);
+      
+      // Get market data for each pair
+      const pairsWithData = await Promise.all(
+        activePairs.map(async (pair) => {
+          try {
+            const marketData = await bitgetService.getMarketData(pair);
+            return {
+              symbol: pair,
+              price: marketData.price,
+              change24h: marketData.change24h,
+              volume: marketData.volume24h,
+              weight: tradingService.getPairWeight(pair)
+            };
+          } catch (err) {
+            return {
+              symbol: pair,
+              price: "0",
+              change24h: "0",
+              volume: "0",
+              weight: tradingService.getPairWeight(pair)
+            };
+          }
+        })
+      );
+      
+      res.status(200).json(pairsWithData);
+    } catch (error) {
+      console.error("Error getting active pairs:", error);
+      res.status(500).json({ error: "Failed to get active trading pairs" });
     }
   });
 

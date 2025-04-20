@@ -39,6 +39,8 @@ let client: APIClient | null = null;
 
 if (hasCredentials) {
   try {
+    console.log('Initializing Bitget client with credentials...');
+    
     // Create real client using the bitget package
     const bitgetClient = new bitget.SpotClient({
       apiKey: apiKey,
@@ -47,6 +49,17 @@ if (hasCredentials) {
       endpoint: 'https://api.bitget.com',
       recv_window: 5000
     });
+
+    // Test API connection by getting account info
+    console.log('Testing Bitget API connection...');
+    bitgetClient.spot.account.assets()
+      .then(response => {
+        console.log('Bitget API connection successful:', response.data ? 'Data received' : 'No data');
+      })
+      .catch(error => {
+        console.error('Bitget API connection failed:', error.message);
+        throw error;
+      });
 
     client = {
       spot: {

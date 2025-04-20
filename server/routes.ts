@@ -26,9 +26,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Account balance endpoint
   app.get("/api/balance", ensureAuthenticated, async (req, res) => {
+    const forceRefresh = req.query.refresh === 'true';
     try {
       const userId = req.user!.id;
-      
+
       if (!bitgetService.isReady()) {
         // If Bitget is not initialized, get from database
         const latestBalance = await storage.getLatestBalance(userId);
@@ -42,7 +43,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             timestamp: Date.now()
           });
         }
-        
+
         return res.status(200).json({
           totalBalance: latestBalance.totalBalance.toString(),
           availableBalance: latestBalance.availableBalance.toString(),
@@ -56,7 +57,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Try to get from Bitget
       try {
         const balance = await bitgetService.getAccountBalance();
-        
+
         // Save the balance to the database
         await storage.saveBalance({
           userId,
@@ -69,11 +70,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             timestamp: Date.now()
           }
         });
-        
+
         res.status(200).json(balance);
       } catch (error) {
         console.error("Error fetching from Bitget:", error);
-        
+
         // If Bitget fails, get from database
         const latestBalance = await storage.getLatestBalance(userId);
         if (!latestBalance) {
@@ -86,7 +87,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             timestamp: Date.now()
           });
         }
-        
+
         res.status(200).json({
           totalBalance: latestBalance.totalBalance.toString(),
           availableBalance: latestBalance.availableBalance.toString(),
@@ -107,7 +108,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user!.id;
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 30;
-      
+
       const history = await storage.getBalanceHistory(userId, limit);
       res.status(200).json(history);
     } catch (error) {
@@ -120,30 +121,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/trading/settings", ensureAuthenticated, async (req, res) => {
     try {
       const userId = req.user!.id;
-      
+
       // Validate request body
       const validationResult = insertTradingSettingsSchema.safeParse({
         ...req.body,
         userId
       });
-      
+
       if (!validationResult.success) {
         return res.status(400).json({ error: "Invalid settings", details: validationResult.error });
       }
-      
+
       // Check if settings already exist
       const existingSettings = await storage.getTradingSettings(userId);
-      
+
       if (existingSettings) {
         // Update existing settings
         const updatedSettings = await storage.updateTradingSettings(
           existingSettings.id,
           validationResult.data
         );
-        
+
         return res.status(200).json(updatedSettings);
       }
-      
+
       // Create new settings
       const newSettings = await storage.createTradingSettings(validationResult.data);
       res.status(201).json(newSettings);
@@ -157,7 +158,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user!.id;
       const settings = await storage.getTradingSettings(userId);
-      
+
       if (!settings) {
         // Return default settings if none exist
         return res.status(200).json({
@@ -170,7 +171,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           enabledTrading: false
         });
       }
-      
+
       res.status(200).json(settings);
     } catch (error) {
       console.error("Error getting trading settings:", error);
@@ -182,12 +183,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/trading/status", ensureAuthenticated, async (req, res) => {
     try {
       const userId = req.user!.id;
-      
+
       // Get trading settings
       const settings = await storage.getTradingSettings(userId);
       const isActive = tradingService.isActive(); // Global trading service status
       const openTrades = await storage.getOpenTrades(userId);
-      
+
       res.status(200).json({
         isActive: isActive,
         enabledInSettings: settings?.enabledTrading || false,
@@ -206,10 +207,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/trading/start", ensureAuthenticated, async (req, res) => {
     try {
       const userId = req.user!.id;
-      
+
       // Make sure trading settings exist
       let settings = await storage.getTradingSettings(userId);
-      
+
       // Create default settings if none exist
       if (!settings) {
         const defaultSettings = {
@@ -221,21 +222,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
           leverageLevel: 1,
           enabledTrading: true
         };
-        
+
         settings = await storage.createTradingSettings(defaultSettings);
         console.log("Created default trading settings for user:", userId);
       } else {
         // Enable trading in existing settings
         await storage.updateTradingSettings(settings.id, { enabledTrading: true });
       }
-      
+
       // Start trading
       const success = await tradingService.startTradingForUser(userId);
-      
+
       if (!success) {
         return res.status(500).json({ error: "Failed to start trading" });
       }
-      
+
       res.status(200).json({ message: "Trading started successfully" });
     } catch (error) {
       console.error("Error starting trading:", error);
@@ -246,18 +247,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/trading/stop", ensureAuthenticated, async (req, res) => {
     try {
       const userId = req.user!.id;
-      
+
       // Get trading settings if they exist
       const settings = await storage.getTradingSettings(userId);
-      
+
       // If settings exist, disable trading
       if (settings) {
         await storage.updateTradingSettings(settings.id, { enabledTrading: false });
       }
-      
+
       // Stop trading regardless of settings presence
       const success = tradingService.stopTradingForUser(userId);
-      
+
       res.status(200).json({ message: "Trading stopped successfully" });
     } catch (error) {
       console.error("Error stopping trading:", error);
@@ -270,7 +271,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user!.id;
       const trades = await storage.getTrades(userId);
-      
+
       res.status(200).json(trades);
     } catch (error) {
       console.error("Error getting trades:", error);
@@ -282,7 +283,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user!.id;
       const openTrades = await storage.getOpenTrades(userId);
-      
+
       res.status(200).json(openTrades);
     } catch (error) {
       console.error("Error getting open trades:", error);
@@ -294,7 +295,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/market/:symbol", ensureAuthenticated, async (req, res) => {
     try {
       const symbol = req.params.symbol || "BTCUSDT";
-      
+
       const marketData = await bitgetService.getMarketData(symbol);
       res.status(200).json(marketData);
     } catch (error) {
@@ -308,7 +309,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const symbol = req.params.symbol || "BTCUSDT";
       const timeframe = req.query.timeframe as string || "1h";
-      
+
       const analysis = await tradingService.processHistoricalData(symbol, timeframe);
       res.status(200).json(analysis);
     } catch (error) {
@@ -316,13 +317,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to process historical data" });
     }
   });
-  
+
   // Get all active trading pairs with their data
   app.get("/api/market/pairs/active", ensureAuthenticated, async (req, res) => {
     try {
       const userId = req.user!.id;
       const activePairs = tradingService.getActiveTradingPairs(userId);
-      
+
       // Get market data for each pair
       const pairsWithData = await Promise.all(
         activePairs.map(async (pair) => {
@@ -346,7 +347,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         })
       );
-      
+
       res.status(200).json(pairsWithData);
     } catch (error) {
       console.error("Error getting active pairs:", error);
@@ -358,13 +359,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/trading/confidence", ensureAuthenticated, async (req, res) => {
     try {
       const { threshold } = req.body;
-      
+
       if (typeof threshold !== 'number' || threshold < 0 || threshold > 100) {
         return res.status(400).json({ error: "Invalid threshold value. Must be between 0 and 100." });
       }
-      
+
       tradingService.setConfidenceThreshold(threshold);
-      
+
       res.status(200).json({ 
         message: "Confidence threshold updated successfully", 
         threshold: tradingService.getConfidenceThreshold() 

@@ -34,6 +34,21 @@ export interface TradeSignal {
 export class TradingService {
   private isRunning: boolean = false;
   private runningIntervals: Record<string, NodeJS.Timeout> = {};
+  private balanceUpdateInterval: NodeJS.Timeout | null = null;
+  
+  private async startBalanceUpdates() {
+    if (this.balanceUpdateInterval) return;
+    
+    this.balanceUpdateInterval = setInterval(async () => {
+      try {
+        const balance = await bitgetService.getAccountBalance();
+        // Broadcast balance update to connected clients
+        console.log('Balance updated:', balance.totalBalance);
+      } catch (error) {
+        console.error('Balance update error:', error);
+      }
+    }, 30000); // Update every 30 seconds
+  }
   
   // Confidence thresholds for trading decisions (0-100%)
   private confidenceThreshold: number = 70;

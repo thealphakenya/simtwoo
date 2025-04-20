@@ -45,14 +45,23 @@ if (hasCredentials) {
   try {
     console.log('Initializing Bitget client with credentials...');
     
+    // Validate credentials format
+    if (!apiKey?.trim() || !apiSecret?.trim() || !apiPass?.trim()) {
+      throw new Error('Invalid API credentials format');
+    }
+    
     // Create real client using the bitget package
     const bitgetClient = new bitget.SpotClient({
-      apiKey: apiKey,
-      apiSecret: apiSecret,
-      apiPassphrase: apiPass,
+      apiKey: apiKey.trim(),
+      apiSecret: apiSecret.trim(),
+      apiPassphrase: apiPass.trim(),
       endpoint: 'https://api.bitget.com',
       recv_window: 5000
     });
+
+    // Test connection
+    await bitgetClient.spot.market.time();
+    console.log('Successfully connected to Bitget API');
 
     client = {
       spot: {

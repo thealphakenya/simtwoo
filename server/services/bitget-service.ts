@@ -34,10 +34,11 @@ let client: APIClient | null = null;
 if (hasCredentials) {
   try {
     // Create real client using the bitget package
-    const bitgetClient = new bitget.default({
+    const bitgetClient = new bitget.SpotClient({
       apiKey: apiKey,
       apiSecret: apiSecret,
-      apiPassphrase: apiPass // Note: Changed to apiPassphrase as per Bitget SDK requirements
+      apiPassphrase: apiPass,
+      endpoint: 'https://api.bitget.com'
     });
 
     client = {

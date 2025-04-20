@@ -5,10 +5,11 @@ import {
   balanceHistory, type BalanceHistory, type InsertBalanceHistory
 } from "@shared/schema";
 import session from "express-session";
-import createMemoryStore from "memorystore";
 import Decimal from "decimal.js";
-
-const MemoryStore = createMemoryStore(session);
+import { db } from "./db";
+import { eq, and, desc } from "drizzle-orm";
+import connectPg from "connect-pg-simple";
+import { pool } from "./db";
 
 // modify the interface with any CRUD methods
 // you might need
@@ -34,170 +35,160 @@ export interface IStorage {
   getBalanceHistory(userId: number, limit?: number): Promise<BalanceHistory[]>;
   saveBalance(balance: InsertBalanceHistory): Promise<BalanceHistory>;
   
-  sessionStore: session.SessionStore;
+  sessionStore: any; // Session store for authentication
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<number, User>;
-  private tradingSettingsMap: Map<number, TradingSettings>;
-  private tradesMap: Map<number, Trade>;
-  private balanceHistoryMap: Map<number, BalanceHistory>;
-  
-  currentId: number;
-  settingsId: number;
-  tradeId: number;
-  balanceId: number;
-  sessionStore: session.SessionStore;
+const PostgresSessionStore = connectPg(session);
 
+export class DatabaseStorage implements IStorage {
+  sessionStore: any;
+  
   constructor() {
-    this.users = new Map();
-    this.tradingSettingsMap = new Map();
-    this.tradesMap = new Map();
-    this.balanceHistoryMap = new Map();
-    
-    this.currentId = 1;
-    this.settingsId = 1;
-    this.tradeId = 1;
-    this.balanceId = 1;
-    
-    this.sessionStore = new MemoryStore({
-      checkPeriod: 86400000, // 24 hours
+    this.sessionStore = new PostgresSessionStore({ 
+      pool, 
+      createTableIfMissing: true,
+      tableName: 'session'
     });
   }
-
+  
   // User methods
   async getUser(id: number): Promise<User | undefined> {
-    return this.users.get(id);
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = this.currentId++;
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
+    const [user] = await db
+      .insert(users)
+      .values(insertUser)
+      .returning();
     return user;
   }
   
   // Trading settings methods
   async getTradingSettings(userId: number): Promise<TradingSettings | undefined> {
-    return Array.from(this.tradingSettingsMap.values()).find(
-      (settings) => settings.userId === userId
-    );
+    const [settings] = await db
+      .select()
+      .from(tradingSettings)
+      .where(eq(tradingSettings.userId, userId));
+    return settings;
   }
   
   async createTradingSettings(settings: InsertTradingSettings): Promise<TradingSettings> {
-    const id = this.settingsId++;
-    const now = new Date();
-    const newSettings: TradingSettings = { 
-      ...settings, 
-      id, 
-      createdAt: now, 
-      updatedAt: now,
-      tradingParams: settings.tradingParams || {}
-    };
-    this.tradingSettingsMap.set(id, newSettings);
+    const [newSettings] = await db
+      .insert(tradingSettings)
+      .values({
+        ...settings,
+        symbol: settings.symbol || 'BTCUSDT',
+        timeframe: settings.timeframe || '1h',
+        strategy: settings.strategy || 'MACD',
+        riskPerTrade: settings.riskPerTrade || '1',
+        leverageLevel: settings.leverageLevel || 1,
+        enabledTrading: settings.enabledTrading || false,
+        tradingParams: settings.tradingParams || {}
+      })
+      .returning();
     return newSettings;
   }
   
   async updateTradingSettings(id: number, settings: Partial<TradingSettings>): Promise<TradingSettings | undefined> {
-    const existingSettings = this.tradingSettingsMap.get(id);
-    if (!existingSettings) {
-      return undefined;
-    }
-    
-    const updatedSettings: TradingSettings = {
-      ...existingSettings,
-      ...settings,
-      updatedAt: new Date()
-    };
-    
-    this.tradingSettingsMap.set(id, updatedSettings);
+    const [updatedSettings] = await db
+      .update(tradingSettings)
+      .set({
+        ...settings,
+        updatedAt: new Date()
+      })
+      .where(eq(tradingSettings.id, id))
+      .returning();
     return updatedSettings;
   }
   
   // Trades methods
   async getTrades(userId: number): Promise<Trade[]> {
-    return Array.from(this.tradesMap.values()).filter(
-      (trade) => trade.userId === userId
-    );
+    const userTrades = await db
+      .select()
+      .from(trades)
+      .where(eq(trades.userId, userId))
+      .orderBy(desc(trades.openedAt));
+    return userTrades;
   }
   
   async getOpenTrades(userId: number): Promise<Trade[]> {
-    return Array.from(this.tradesMap.values()).filter(
-      (trade) => trade.userId === userId && trade.status === "OPEN"
-    );
+    const openTrades = await db
+      .select()
+      .from(trades)
+      .where(
+        and(
+          eq(trades.userId, userId),
+          eq(trades.status, 'OPEN')
+        )
+      )
+      .orderBy(desc(trades.openedAt));
+    return openTrades;
   }
   
   async createTrade(trade: InsertTrade): Promise<Trade> {
-    const id = this.tradeId++;
     const now = new Date();
-    const newTrade: Trade = {
-      ...trade,
-      id,
-      openedAt: now,
-      closedAt: undefined,
-      tradeData: trade.tradeData || {}
-    };
-    this.tradesMap.set(id, newTrade);
+    const [newTrade] = await db
+      .insert(trades)
+      .values({
+        ...trade,
+        openedAt: now,
+        tradeData: trade.tradeData || {}
+      })
+      .returning();
     return newTrade;
   }
   
   async updateTrade(id: number, updates: Partial<Trade>): Promise<Trade | undefined> {
-    const existingTrade = this.tradesMap.get(id);
-    if (!existingTrade) {
-      return undefined;
-    }
-    
-    const updatedTrade: Trade = {
-      ...existingTrade,
-      ...updates,
-      closedAt: updates.status === "CLOSED" ? new Date() : existingTrade.closedAt
-    };
-    
-    this.tradesMap.set(id, updatedTrade);
+    const [updatedTrade] = await db
+      .update(trades)
+      .set({
+        ...updates,
+        closedAt: updates.status === "CLOSED" ? new Date() : undefined
+      })
+      .where(eq(trades.id, id))
+      .returning();
     return updatedTrade;
   }
   
   // Balance methods
   async getLatestBalance(userId: number): Promise<BalanceHistory | undefined> {
-    const userBalances = Array.from(this.balanceHistoryMap.values())
-      .filter(balance => balance.userId === userId)
-      .sort((a, b) => {
-        if (a.timestamp > b.timestamp) return -1;
-        if (a.timestamp < b.timestamp) return 1;
-        return 0;
-      });
-      
-    return userBalances.length > 0 ? userBalances[0] : undefined;
+    const [latestBalance] = await db
+      .select()
+      .from(balanceHistory)
+      .where(eq(balanceHistory.userId, userId))
+      .orderBy(desc(balanceHistory.timestamp))
+      .limit(1);
+    return latestBalance;
   }
   
   async getBalanceHistory(userId: number, limit = 30): Promise<BalanceHistory[]> {
-    return Array.from(this.balanceHistoryMap.values())
-      .filter(balance => balance.userId === userId)
-      .sort((a, b) => {
-        if (a.timestamp > b.timestamp) return -1;
-        if (a.timestamp < b.timestamp) return 1;
-        return 0;
-      })
-      .slice(0, limit);
+    const history = await db
+      .select()
+      .from(balanceHistory)
+      .where(eq(balanceHistory.userId, userId))
+      .orderBy(desc(balanceHistory.timestamp))
+      .limit(limit);
+    return history;
   }
   
   async saveBalance(balance: InsertBalanceHistory): Promise<BalanceHistory> {
-    const id = this.balanceId++;
-    const newBalance: BalanceHistory = {
-      ...balance,
-      id,
-      timestamp: new Date(),
-      balanceData: balance.balanceData || {}
-    };
-    this.balanceHistoryMap.set(id, newBalance);
+    const [newBalance] = await db
+      .insert(balanceHistory)
+      .values({
+        ...balance,
+        timestamp: new Date(),
+        balanceData: balance.balanceData || {}
+      })
+      .returning();
     return newBalance;
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();

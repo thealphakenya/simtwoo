@@ -26,13 +26,14 @@ const apiKey = process.env.BITGET_API_KEY || '';
 const apiSecret = process.env.BITGET_API_SECRET || '';
 const apiPass = process.env.BITGET_API_PASSPHRASE || '';
 
-// Check if all required API credentials are available
-const hasCredentials = apiKey && apiSecret && apiPass;
+// Check if all required API credentials are available and not empty strings
+const hasCredentials = apiKey.trim() !== '' && apiSecret.trim() !== '' && apiPass.trim() !== '';
 
 console.log('API Credentials Check:', {
-  hasKey: !!apiKey,
-  hasSecret: !!apiSecret,
-  hasPass: !!apiPass
+  hasKey: apiKey.trim() !== '',
+  hasSecret: apiSecret.trim() !== '',
+  hasPass: apiPass.trim() !== '',
+  credentials: hasCredentials
 });
 
 let client: APIClient | null = null;

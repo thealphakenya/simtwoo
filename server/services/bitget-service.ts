@@ -54,17 +54,6 @@ if (hasCredentials) {
       recv_window: 5000
     });
 
-    // Test API connection by getting account info
-    console.log('Testing Bitget API connection...');
-    bitgetClient.spot.account.assets()
-      .then(response => {
-        console.log('Bitget API connection successful:', response.data ? 'Data received' : 'No data');
-      })
-      .catch(error => {
-        console.error('Bitget API connection failed:', error.message);
-        throw error;
-      });
-
     client = {
       spot: {
         account: {

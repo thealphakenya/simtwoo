@@ -29,7 +29,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user!.id;
       
-      // Try to get from bitget first
+      if (!bitgetService.isReady()) {
+        // If Bitget is not initialized, get from database
+        const latestBalance = await storage.getLatestBalance(userId);
+        if (!latestBalance) {
+          return res.status(200).json({
+            totalBalance: "0",
+            availableBalance: "0",
+            frozenBalance: "0",
+            unrealizedPnl: "0",
+            marginBalance: "0",
+            timestamp: Date.now()
+          });
+        }
+        
+        return res.status(200).json({
+          totalBalance: latestBalance.totalBalance.toString(),
+          availableBalance: latestBalance.availableBalance.toString(),
+          frozenBalance: latestBalance.balanceData?.frozenBalance || "0",
+          unrealizedPnl: latestBalance.balanceData?.unrealizedPnl || "0",
+          marginBalance: latestBalance.balanceData?.marginBalance || "0",
+          timestamp: latestBalance.timestamp.getTime()
+        });
+      }
+
+      // Try to get from Bitget
       try {
         const balance = await bitgetService.getAccountBalance();
         
@@ -41,16 +65,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
           balanceData: {
             frozenBalance: balance.frozenBalance,
             unrealizedPnl: balance.unrealizedPnl,
+            marginBalance: balance.marginBalance,
             timestamp: Date.now()
           }
         });
         
         res.status(200).json(balance);
       } catch (error) {
-        // If bitget fails, get from database
+        console.error("Error fetching from Bitget:", error);
+        
+        // If Bitget fails, get from database
         const latestBalance = await storage.getLatestBalance(userId);
         if (!latestBalance) {
-          return res.status(404).json({ error: "No balance information found" });
+          return res.status(200).json({
+            totalBalance: "0",
+            availableBalance: "0",
+            frozenBalance: "0",
+            unrealizedPnl: "0",
+            marginBalance: "0",
+            timestamp: Date.now()
+          });
         }
         
         res.status(200).json({
@@ -58,6 +92,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           availableBalance: latestBalance.availableBalance.toString(),
           frozenBalance: latestBalance.balanceData?.frozenBalance || "0",
           unrealizedPnl: latestBalance.balanceData?.unrealizedPnl || "0",
+          marginBalance: latestBalance.balanceData?.marginBalance || "0",
           timestamp: latestBalance.timestamp.getTime()
         });
       }

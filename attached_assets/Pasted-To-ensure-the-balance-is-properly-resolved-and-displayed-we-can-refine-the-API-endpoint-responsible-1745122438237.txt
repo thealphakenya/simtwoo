@@ -1,0 +1,48 @@
+To ensure the balance is properly resolved and displayed, we can refine the API endpoint responsible for fetching the account balance in the server/routes.ts file. This will ensure that the application retrieves the correct information regarding the balance from either the Bitget API or the database. Here's a revised version of your balance endpoint to handle these cases effectively.
+
+Updated Code for server/routes.ts
+// Account balance endpoint
+app.get("/api/balance", ensureAuthenticated, async (req, res) => {
+  try {
+    const userId = req.user!.id;
+    // Try to get from Bitget first
+    try {
+      const balance = await bitgetService.getAccountBalance();
+      
+      // Save the balance to the database
+      await storage.saveBalance({
+        userId,
+        totalBalance: balance.totalBalance,
+        availableBalance: balance.availableBalance,
+        balanceData: {
+          frozenBalance: balance.frozenBalance,
+          unrealizedPnl: balance.unrealizedPnl,
+          marginBalance: balance.marginBalance || "0",
+          timestamp: Date.now()
+        }
+      });
+      res.status(200).json(balance);
+    } catch (error) {
+      console.error("Error fetching from Bitget, trying database:", error);
+      // If Bitget fails, get from database
+      const latestBalance = await storage.getLatestBalance(userId);
+      if (!latestBalance) {
+        return res.status(404).json({ error: "No balance information found" });
+      }
+      res.status(200).json({
+        totalBalance: latestBalance.totalBalance.toString(),
+        availableBalance: latestBalance.availableBalance.toString(),
+        frozenBalance: latestBalance.balanceData?.frozenBalance || "0",
+        unrealizedPnl: latestBalance.balanceData?.unrealizedPnl || "0",
+        timestamp: latestBalance.timestamp.getTime()
+      });
+    }
+  } catch (error) {
+    console.error("Error getting balance:", error);
+    res.status(500).json({ error: "Failed to get balance information" });
+  }
+});
+Key Changes:
+Error Handling Enhancements: Improved logging for better error tracking when fetching from the Bitget API.
+Balance Data Structure: Ensure that marginBalance is properly included in the balance record.
+Database Fallback: If the Bitget API call fails, it accurately retrieves the latest balance from the database and provides a clear response.

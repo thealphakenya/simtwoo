@@ -937,44 +937,115 @@ export default function DashboardPage() {
                   </CardFooter>
                 </Card>
 
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center">
-                      <Bot className="h-5 w-5 mr-2 text-blue-500" />
-                      AI Strategy Weights
-                    </CardTitle>
-                    <CardDescription>Adjust the importance of each model in the ensemble</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-6">
-                      <div>
-                        <div className="flex justify-between text-sm mb-2">
-                          <span className="font-medium">LSTM Model</span>
-                          <span>33%</span>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center">
+                        <Bot className="h-5 w-5 mr-2 text-blue-500" />
+                        AI Strategy Weights
+                      </CardTitle>
+                      <CardDescription>Adjust the importance of each model in the ensemble</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-6">
+                        <div>
+                          <div className="flex justify-between text-sm mb-2">
+                            <span className="font-medium">LSTM Model</span>
+                            <span>33%</span>
+                          </div>
+                          <Slider defaultValue={[33]} max={100} step={1} className="h-2" />
                         </div>
-                        <Slider defaultValue={[33]} max={100} step={1} className="h-2" />
-                      </div>
-                      <div>
-                        <div className="flex justify-between text-sm mb-2">
-                          <span className="font-medium">Trading AI</span>
-                          <span>33%</span>
+                        <div>
+                          <div className="flex justify-between text-sm mb-2">
+                            <span className="font-medium">Trading AI</span>
+                            <span>33%</span>
+                          </div>
+                          <Slider defaultValue={[33]} max={100} step={1} className="h-2" />
                         </div>
-                        <Slider defaultValue={[33]} max={100} step={1} className="h-2" />
-                      </div>
-                      <div>
-                        <div className="flex justify-between text-sm mb-2">
-                          <span className="font-medium">Reinforcement Learning</span>
-                          <span>34%</span>
+                        <div>
+                          <div className="flex justify-between text-sm mb-2">
+                            <span className="font-medium">Reinforcement Learning</span>
+                            <span>34%</span>
+                          </div>
+                          <Slider defaultValue={[34]} max={100} step={1} className="h-2" />
                         </div>
-                        <Slider defaultValue={[34]} max={100} step={1} className="h-2" />
+                        
+                        <Button variant="outline" className="w-full mt-4">
+                          Update Strategy
+                        </Button>
                       </div>
-                      
-                      <Button variant="outline" className="w-full mt-4">
-                        Update Strategy
+                    </CardContent>
+                  </Card>
+                  
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center">
+                        <CandlestickChart className="h-5 w-5 mr-2 text-blue-500" />
+                        Trading Pairs Selection
+                      </CardTitle>
+                      <CardDescription>Auto-selects top 3 trading pairs based on performance</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium">Auto-select best pairs:</span>
+                          <Switch 
+                            checked={tradingSettings?.strategy === 'ENSEMBLE' || tradingSettings?.strategy === 'AUTO'} 
+                            onCheckedChange={(checked) => handleUpdateSettings('strategy', checked ? 'ENSEMBLE' : 'MACD')}
+                            disabled={tradingStatus?.isActive}
+                          />
+                        </div>
+                        
+                        <div className="space-y-3 mt-4">
+                          <div>
+                            <div className="flex justify-between text-sm mb-2">
+                              <span className="font-medium">BTC/USDT</span>
+                              <span>30%</span>
+                            </div>
+                            <Slider defaultValue={[30]} max={100} step={1} disabled className="h-2" />
+                          </div>
+                          <div>
+                            <div className="flex justify-between text-sm mb-2">
+                              <span className="font-medium">ETH/USDT</span>
+                              <span>25%</span>
+                            </div>
+                            <Slider defaultValue={[25]} max={100} step={1} disabled className="h-2" />
+                          </div>
+                          <div>
+                            <div className="flex justify-between text-sm mb-2">
+                              <span className="font-medium">BNB/USDT</span>
+                              <span>20%</span>
+                            </div>
+                            <Slider defaultValue={[20]} max={100} step={1} disabled className="h-2" />
+                          </div>
+                        </div>
+                        
+                        <div className="bg-blue-50 p-3 rounded-md mt-2">
+                          <div className="flex items-center text-xs text-blue-700">
+                            <Info className="h-4 w-4 mr-2 flex-shrink-0" />
+                            <span>Trading bot will automatically select the best performing pairs, limited to maximum <strong>{tradingStatus?.maxConcurrentTrades || 3}</strong> concurrent trades for optimal performance.</span>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                    <CardFooter>
+                      <Button
+                        variant={tradingStatus?.isActive ? "destructive" : "default"}
+                        className="w-full"
+                        onClick={handleToggleTrading}
+                        disabled={startTradingMutation.isPending || stopTradingMutation.isPending}
+                      >
+                        {startTradingMutation.isPending || stopTradingMutation.isPending ? (
+                          "Processing..."
+                        ) : tradingStatus?.isActive ? (
+                          "Stop Auto Trading"
+                        ) : (
+                          "Start Auto Trading"
+                        )}
                       </Button>
-                    </div>
-                  </CardContent>
-                </Card>
+                    </CardFooter>
+                  </Card>
+                </div>
 
                 <Card>
                   <CardHeader>

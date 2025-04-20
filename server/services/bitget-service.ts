@@ -44,7 +44,8 @@ if (hasCredentials) {
       apiKey: apiKey,
       apiSecret: apiSecret,
       apiPassphrase: apiPass,
-      endpoint: 'https://api.bitget.com'
+      endpoint: 'https://api.bitget.com',
+      recv_window: 5000
     });
 
     client = {
@@ -144,11 +145,11 @@ export class BitgetService {
 
       if (Array.isArray(response.data)) {
         for (const asset of response.data) {
-          if (asset.available && parseFloat(asset.available) > 0) {
-            const available = new Decimal(asset.available);
-            const frozen = new Decimal(asset.frozen || '0');
-            const total = available.plus(frozen);
+          const available = new Decimal(asset.available || '0');
+          const frozen = new Decimal(asset.frozen || '0');
+          const total = available.plus(frozen);
 
+          if (!total.isZero()) {
             balances[asset.coinName] = {
               symbol: asset.coinName,
               available: available.toString(),
@@ -156,11 +157,12 @@ export class BitgetService {
               total: total.toString()
             };
 
-            // Only sum up USDT value to get total balance
-            if (asset.coinName === 'USDT') {
-              totalBalance = totalBalance.plus(total);
-              availableBalance = availableBalance.plus(available);
-              frozenBalance = frozenBalance.plus(frozen);
+            // Add all assets converted to USDT value
+            if (asset.usdtValue) {
+              const usdtValue = new Decimal(asset.usdtValue);
+              totalBalance = totalBalance.plus(usdtValue);
+              availableBalance = availableBalance.plus(available.mul(usdtValue.div(total)));
+              frozenBalance = frozenBalance.plus(frozen.mul(usdtValue.div(total)));
             }
           }
         }

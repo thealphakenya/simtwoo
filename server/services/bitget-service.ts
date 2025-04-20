@@ -146,10 +146,12 @@ export class BitgetService {
       if (Array.isArray(response.data)) {
         for (const asset of response.data) {
           const available = new Decimal(asset.available || '0');
-          const frozen = new Decimal(asset.frozen || '0');
+          const frozen = new Decimal(asset.locked || '0');
+          const usdtValue = new Decimal(asset.usdtValue || '0');
           const total = available.plus(frozen);
 
-          if (!total.isZero()) {
+          // Store all non-zero balances
+          if (!total.isZero() || !usdtValue.isZero()) {
             balances[asset.coinName] = {
               symbol: asset.coinName,
               available: available.toString(),
@@ -157,13 +159,10 @@ export class BitgetService {
               total: total.toString()
             };
 
-            // Add all assets converted to USDT value
-            if (asset.usdtValue) {
-              const usdtValue = new Decimal(asset.usdtValue);
-              totalBalance = totalBalance.plus(usdtValue);
-              availableBalance = availableBalance.plus(available.mul(usdtValue.div(total)));
-              frozenBalance = frozenBalance.plus(frozen.mul(usdtValue.div(total)));
-            }
+            // Add to total USDT value
+            totalBalance = totalBalance.plus(usdtValue);
+            availableBalance = availableBalance.plus(available.mul(usdtValue.div(total.isZero() ? new Decimal(1) : total)));
+            frozenBalance = frozenBalance.plus(frozen.mul(usdtValue.div(total.isZero() ? new Decimal(1) : total)));
           }
         }
       }

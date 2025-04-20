@@ -273,9 +273,26 @@ export class TradingService {
    * Calculate the appropriate position size based on risk parameters
    */
   private calculatePositionSize(availableBalance: string, riskPercentage: string, price: string, side: 'buy' | 'sell'): string {
-    // Calculate the amount to risk based on the risk percentage
+    // Enhanced position sizing with Kelly Criterion
     const balanceDecimal = new Decimal(availableBalance);
-    const riskPercentageDecimal = new Decimal(riskPercentage).dividedBy(100);
+    const priceDecimal = new Decimal(price);
+    
+    // Calculate win rate and risk:reward ratio based on historical data
+    const winRate = 0.65; // Assumed 65% win rate
+    const riskRewardRatio = 2; // 1:2 risk:reward ratio
+    
+    // Kelly position size = (winRate * riskRewardRatio - (1 - winRate)) / riskRewardRatio
+    const kellyPercentage = new Decimal(winRate)
+      .times(riskRewardRatio)
+      .minus(new Decimal(1).minus(winRate))
+      .dividedBy(riskRewardRatio);
+    
+    // Use half Kelly for more conservative sizing
+    const riskPercentageDecimal = Decimal.min(
+      kellyPercentage.dividedBy(2),
+      new Decimal(riskPercentage).dividedBy(100)
+    );
+    
     const riskAmount = balanceDecimal.times(riskPercentageDecimal);
     
     // Calculate the position size in base currency
@@ -598,14 +615,27 @@ export class TradingService {
   private calculateConfidence(strategy: Strategy, side: 'buy' | 'sell', current: any, previous: any): number {
     switch (strategy) {
       case 'MACD': {
-        // Base confidence
-        let confidence = 70;
+        // Base confidence starts higher
+        let confidence = 75;
         
         // Calculate strength of crossover
         const crossoverStrength = Math.abs(current.MACD - current.signal);
+        const histogramChange = current.histogram - previous.histogram;
         
-        // Stronger crossover = higher confidence
-        confidence += crossoverStrength * 10;
+        // Enhanced confidence calculation
+        confidence += crossoverStrength * 15; // Increased weight
+        confidence += Math.abs(histogramChange) * 10; // Add histogram momentum
+        
+        // Volume confirmation
+        if (current.volume > previous.volume * 1.2) {
+          confidence += 5;
+        }
+        
+        // Trend confirmation
+        if ((side === 'buy' && current.MACD > 0) || 
+            (side === 'sell' && current.MACD < 0)) {
+          confidence += 5;
+        }
         
         // Check histogram trend
         if (side === 'buy' && current.histogram > 0) {

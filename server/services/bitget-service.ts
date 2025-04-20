@@ -249,14 +249,28 @@ export class BitgetService {
       throw new Error('Bitget API client not initialized');
     }
 
-    try {
-      const orderParams = {
-        symbol: params.symbol,
-        side: params.side,
-        orderType: params.orderType,
-        force: 'normal',
-        size: params.size
-      };
+    const maxRetries = 3;
+    let attempt = 0;
+
+    while (attempt < maxRetries) {
+      try {
+        // Get latest price for market orders
+        const ticker = await client.spot.market.ticker({ symbol: params.symbol });
+        const currentPrice = ticker.data.close;
+
+        const orderParams = {
+          symbol: params.symbol,
+          side: params.side,
+          orderType: params.orderType,
+          force: 'normal',
+          size: params.size,
+          clientOid: `trade_${Date.now()}`, // Unique identifier
+          // Use limit orders slightly above/below market for better fills
+          price: params.orderType === 'limit' ? params.price : 
+                 params.side === 'buy' ? 
+                 (parseFloat(currentPrice) * 1.002).toString() : // 0.2% above market
+                 (parseFloat(currentPrice) * 0.998).toString()   // 0.2% below market
+        };
       
       // Add price for limit orders
       if (params.orderType === 'limit' && params.price) {

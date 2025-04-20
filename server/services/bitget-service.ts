@@ -22,18 +22,21 @@ interface APIClient {
 }
 
 // Initialize Bitget API Client
-const apiKey = process.env.BITGET_API_KEY || '';
-const apiSecret = process.env.BITGET_API_SECRET || '';
-const apiPass = process.env.BITGET_API_PASSPHRASE || '';
+const apiKey = process.env.BITGET_API_KEY;
+const apiSecret = process.env.BITGET_API_SECRET;
+const apiPass = process.env.BITGET_API_PASSPHRASE;
 
-// Check if all required API credentials are available and not empty strings
-const hasCredentials = apiKey.trim() !== '' && apiSecret.trim() !== '' && apiPass.trim() !== '';
+// Check if all required API credentials are available
+const hasCredentials = Boolean(apiKey && apiSecret && apiPass);
 
 console.log('API Credentials Check:', {
-  hasKey: apiKey.trim() !== '',
-  hasSecret: apiSecret.trim() !== '',
-  hasPass: apiPass.trim() !== '',
-  credentials: hasCredentials
+  hasKey: Boolean(apiKey),
+  hasSecret: Boolean(apiSecret),
+  hasPass: Boolean(apiPass),
+  credentials: hasCredentials,
+  keyLength: apiKey?.length,
+  secretLength: apiSecret?.length,
+  passLength: apiPass?.length
 });
 
 let client: APIClient | null = null;
